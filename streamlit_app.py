@@ -5,7 +5,7 @@ import re
 import json
 import csv
 import io
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from openai import OpenAI
 
 # ==============================================================================
@@ -420,16 +420,33 @@ def render_build_card(build, index=0):
     meta = build["meta"]
     parts = build["parts"]
     prices = build["prices"]
+    quote_id = meta.get('quote_id', 'N/A')
+    customer = meta.get('customer', 'N/A')
 
     with st.container():
-        col1, col2, col3 = st.columns([2, 4, 2])
+        col1, col2, col3, col_copy = st.columns([2, 3, 2, 1])
         with col1:
-            st.markdown(f"**Quote:** `{meta.get('quote_id', 'N/A')}`")
-            st.markdown(f"**Client:** {meta.get('customer', 'N/A')}")
+            st.markdown(f"**Quote:** `{quote_id}`")
+            st.markdown(f"**Client:** {customer}")
         with col2:
             st.markdown(f"**Date:** {meta.get('date', 'N/A')}")
         with col3:
             st.metric("Total Price", f"₹{build['price']:,}")
+        with col_copy:
+            copy_text_js = json.dumps(f"Quote: {quote_id} | Client: {customer}")
+            st.components.v1.html(f"""<button id="cpBtn" style="background:#3b82f6;color:white;border:none;
+    padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;
+    white-space:nowrap;margin-top:10px;">📋 Copy</button>
+<script>
+var btn=document.getElementById('cpBtn'),text={copy_text_js};
+function done(){{btn.innerText='✅ Copied!';setTimeout(function(){{btn.innerText='📋 Copy'}},1500)}}
+function fallback(){{var t=document.createElement('textarea');t.value=text;
+t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);
+t.select();document.execCommand('copy');document.body.removeChild(t);done()}}
+btn.addEventListener('click',function(){{
+if(navigator.clipboard&&window.isSecureContext){{navigator.clipboard.writeText(text).then(done).catch(fallback)}}
+else{{fallback()}}}});
+</script>""", height=45)
 
         labels = {
             "cpu": "Processor", "mobo": "Motherboard", "ram": "RAM",
@@ -548,32 +565,51 @@ def main():
     elif page == "🔍 Build Search":
         st.header("🔍 PC Build Search")
 
+        # Highlight today's date in blue in the date picker
+        st.markdown("""
+        <style>
+        [data-baseweb="calendar"] [aria-label*="today"],
+        [data-baseweb="calendar"] td[aria-selected="false"] div[data-today="true"],
+        [data-baseweb="calendar"] .react-datepicker__day--today {
+            background-color: #3b82f6 !important;
+            color: white !important;
+            border-radius: 50% !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
         # Handle clear filters flag (set by callback before widgets render)
         if st.session_state.get("_clear_filters"):
             for key in ["filter_cpu", "filter_mobo", "filter_ram", "filter_ssd",
-                        "filter_gpu", "filter_cooler", "filter_case", "filter_psu"]:
+                        "filter_gpu", "filter_cooler", "filter_case", "filter_psu",
+                        "filter_quote_id", "filter_client"]:
                 st.session_state[key] = ""
+            st.session_state["filter_min_budget"] = 0
+            st.session_state["filter_max_budget"] = 2000000
+            st.session_state["filter_date_from"] = date.today() - timedelta(days=60)
+            st.session_state["filter_date_to"] = date.today()
+            st.session_state["filter_unique"] = True
             st.session_state["search_results"] = []
             st.session_state["_clear_filters"] = False
 
         with st.expander("Filters", expanded=True):
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                min_budget = st.number_input("Min Budget (₹)", value=0, step=10000)
+                min_budget = st.number_input("Min Budget (₹)", value=0, step=10000, key="filter_min_budget")
             with col2:
-                max_budget = st.number_input("Max Budget (₹)", value=200000, step=10000)
+                max_budget = st.number_input("Max Budget (₹)", value=2000000, step=10000, key="filter_max_budget")
             with col3:
-                quote_id = st.text_input("Quote ID")
+                quote_id = st.text_input("Quote ID", key="filter_quote_id")
             with col4:
-                client_name = st.text_input("Client Name")
+                client_name = st.text_input("Client Name", key="filter_client")
 
             col_d1, col_d2, col_d3 = st.columns([1, 1, 1])
             with col_d1:
-                date_from = st.date_input("From Date", value=None)
+                date_from = st.date_input("From Date", value=date.today() - timedelta(days=60), key="filter_date_from")
             with col_d2:
-                date_to = st.date_input("To Date", value=None)
+                date_to = st.date_input("To Date", value=date.today(), key="filter_date_to")
             with col_d3:
-                unique_only = st.checkbox("Unique Builds Only")
+                unique_only = st.checkbox("Unique Builds Only", value=True, key="filter_unique")
 
             st.subheader("Component Filters")
             component_labels = {
