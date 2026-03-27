@@ -579,7 +579,17 @@ def main():
                 with cols[i % 4]:
                     component_filters[key] = st.text_input(f"{label}", key=f"filter_{key}")
 
-        if st.button("🔍 Search Builds", type="primary", use_container_width=True):
+        btn_col1, btn_col2 = st.columns([4, 1])
+        with btn_col2:
+            if st.button("✖ Clear Filters", use_container_width=True):
+                for key in ["filter_cpu", "filter_mobo", "filter_ram", "filter_ssd",
+                            "filter_gpu", "filter_cooler", "filter_case", "filter_psu"]:
+                    st.session_state[key] = ""
+                st.session_state["search_results"] = []
+                st.rerun()
+        with btn_col1:
+            search_clicked = st.button("🔍 Search Builds", type="primary", use_container_width=True)
+        if search_clicked:
             filters = {
                 "min_budget": min_budget,
                 "max_budget": max_budget,
