@@ -548,6 +548,14 @@ def main():
     elif page == "🔍 Build Search":
         st.header("🔍 PC Build Search")
 
+        # Handle clear filters flag (set by callback before widgets render)
+        if st.session_state.get("_clear_filters"):
+            for key in ["filter_cpu", "filter_mobo", "filter_ram", "filter_ssd",
+                        "filter_gpu", "filter_cooler", "filter_case", "filter_psu"]:
+                st.session_state[key] = ""
+            st.session_state["search_results"] = []
+            st.session_state["_clear_filters"] = False
+
         with st.expander("Filters", expanded=True):
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -581,12 +589,9 @@ def main():
 
         btn_col1, btn_col2 = st.columns([4, 1])
         with btn_col2:
-            if st.button("✖ Clear Filters", use_container_width=True):
-                for key in ["filter_cpu", "filter_mobo", "filter_ram", "filter_ssd",
-                            "filter_gpu", "filter_cooler", "filter_case", "filter_psu"]:
-                    st.session_state[key] = ""
-                st.session_state["search_results"] = []
-                st.rerun()
+            def _clear_filters():
+                st.session_state["_clear_filters"] = True
+            st.button("✖ Clear Filters", use_container_width=True, on_click=_clear_filters)
         with btn_col1:
             search_clicked = st.button("🔍 Search Builds", type="primary", use_container_width=True)
         if search_clicked:
