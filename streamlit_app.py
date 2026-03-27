@@ -173,18 +173,33 @@ def search_builds(builds, filters):
             "fans", "wifi", "gpu", "cooler", "psu", "extra", "plate", "paste",
         ]
         for key in component_keys:
-            search_val = filters.get(key, "").strip().lower()
-            exclude_val = filters.get(f"{key}_exclude", "").strip().lower()
+            raw_val = filters.get(key, "").strip()
+            if not raw_val:
+                continue
             part_name = b["parts"].get(key, "").lower()
 
-            if search_val and search_val not in part_name:
+            # Parse +/- syntax: "5060+ti" = include 5060 & ti
+            #                    "5060-ti" = include 5060, exclude ti
+            tokens = re.split(r'(?=[+-])', raw_val)
+            includes = []
+            excludes = []
+            for tok in tokens:
+                tok = tok.strip()
+                if not tok:
+                    continue
+                if tok.startswith("-"):
+                    excludes.append(tok[1:].strip().lower())
+                elif tok.startswith("+"):
+                    includes.append(tok[1:].strip().lower())
+                else:
+                    includes.append(tok.lower())
+
+            if any(inc and inc not in part_name for inc in includes):
                 valid = False
                 break
-            if exclude_val:
-                exclusions = [x.strip() for x in exclude_val.split(",") if x.strip()]
-                if any(ex in part_name for ex in exclusions):
-                    valid = False
-                    break
+            if any(exc and exc in part_name for exc in excludes):
+                valid = False
+                break
         if not valid:
             continue
 
@@ -424,29 +439,34 @@ def render_build_card(build, index=0):
     customer = meta.get('customer', 'N/A')
 
     with st.container():
-        col1, col2, col3, col_copy = st.columns([2, 3, 2, 1])
+        col1, col2, col3 = st.columns([3, 3, 2])
         with col1:
-            st.markdown(f"**Quote:** `{quote_id}`")
-            st.markdown(f"**Client:** {customer}")
+            quote_js = json.dumps(quote_id)
+            st.components.v1.html(f"""<div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+<span style="font-size:14px"><b>Quote:</b> <code>{quote_id}</code></span>
+<button id="qb{index}" style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px"
+title="Copy Quote ID">📋</button></div>
+<script>
+(function(){{var b=document.getElementById('qb{index}'),t={quote_js};
+function d(){{b.innerText='✅';setTimeout(function(){{b.innerText='📋'}},1200)}}
+function f(){{var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.left='-9999px';document.body.appendChild(a);a.select();document.execCommand('copy');document.body.removeChild(a);d()}}
+b.addEventListener('click',function(){{if(navigator.clipboard&&window.isSecureContext){{navigator.clipboard.writeText(t).then(d).catch(f)}}else{{f()}}}});}})();
+</script>""", height=36)
+            client_js = json.dumps(customer)
+            st.components.v1.html(f"""<div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+<span style="font-size:14px"><b>Client:</b> {customer}</span>
+<button id="cb{index}" style="background:none;border:none;cursor:pointer;font-size:14px;padding:2px"
+title="Copy Client Name">📋</button></div>
+<script>
+(function(){{var b=document.getElementById('cb{index}'),t={client_js};
+function d(){{b.innerText='✅';setTimeout(function(){{b.innerText='📋'}},1200)}}
+function f(){{var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.left='-9999px';document.body.appendChild(a);a.select();document.execCommand('copy');document.body.removeChild(a);d()}}
+b.addEventListener('click',function(){{if(navigator.clipboard&&window.isSecureContext){{navigator.clipboard.writeText(t).then(d).catch(f)}}else{{f()}}}});}})();
+</script>""", height=36)
         with col2:
             st.markdown(f"**Date:** {meta.get('date', 'N/A')}")
         with col3:
             st.metric("Total Price", f"₹{build['price']:,}")
-        with col_copy:
-            copy_text_js = json.dumps(f"Quote: {quote_id} | Client: {customer}")
-            st.components.v1.html(f"""<button id="cpBtn" style="background:#3b82f6;color:white;border:none;
-    padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;
-    white-space:nowrap;margin-top:10px;">📋 Copy</button>
-<script>
-var btn=document.getElementById('cpBtn'),text={copy_text_js};
-function done(){{btn.innerText='✅ Copied!';setTimeout(function(){{btn.innerText='📋 Copy'}},1500)}}
-function fallback(){{var t=document.createElement('textarea');t.value=text;
-t.style.position='fixed';t.style.left='-9999px';document.body.appendChild(t);
-t.select();document.execCommand('copy');document.body.removeChild(t);done()}}
-btn.addEventListener('click',function(){{
-if(navigator.clipboard&&window.isSecureContext){{navigator.clipboard.writeText(text).then(done).catch(fallback)}}
-else{{fallback()}}}});
-</script>""", height=45)
 
         labels = {
             "cpu": "Processor", "mobo": "Motherboard", "ram": "RAM",
